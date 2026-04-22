@@ -1,4 +1,4 @@
-import { gemini, CHAT_MODEL } from '@/lib/gemini/client';
+import { gemini } from '@/lib/gemini/client';
 import { TOOL_DECLARATIONS } from '@/lib/gemini/functions';
 import { executeTool } from './tools';
 import { getSystemPrompt } from '@/lib/rag/prompts';
@@ -17,16 +17,16 @@ export async function* runAgent(
   let fullResponse = '';
 
   try {
-    const model = gemini.getGenerativeModel({
-      model: CHAT_MODEL,
-      tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
-      systemInstruction: getSystemPrompt(module),
-      generationConfig: {
-        temperature: 0.3,
-        topP: 0.95,
-        maxOutputTokens: 2048,
+    const chatModel = process.env.GEMINI_CHAT_MODEL ?? 'gemini-2.5-flash';
+    const model = gemini.getGenerativeModel(
+      {
+        model: chatModel,
+        tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
+        systemInstruction: getSystemPrompt(module),
+        generationConfig: { temperature: 0.3, topP: 0.95, maxOutputTokens: 2048 },
       },
-    });
+      { apiVersion: 'v1' }
+    );
 
     const chat = model.startChat({ history: [] });
     let result = await chat.sendMessage(query);

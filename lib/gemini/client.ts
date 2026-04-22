@@ -8,6 +8,6 @@ if (!apiKey) {
 
 export const gemini = new GoogleGenerativeAI(apiKey);
 
-// gemini-2.0-flash has limit:0 on free tier for this key; flash-lite has higher free-tier quotas
-export const CHAT_MODEL = 'gemini-2.0-flash-lite';
+// streaming.ts and embeddings.ts call the v1 REST API directly (bypasses SDK's v1beta hardcode)
+export const CHAT_MODEL = 'gemini-2.5-flash';
 export const EMBEDDING_MODEL = 'gemini-embedding-001';
