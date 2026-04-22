@@ -1,0 +1,86 @@
+Icertis Contract Management (ICM) - Standard Operating Procedures
+
+1. CONTRACT CREATION
+
+1.1 Creating a New Contract
+- Navigate to Contracts > Create New Contract
+- Select the contract type (Master Service Agreement, Purchase Order, NDA, etc.)
+- Fill in the mandatory fields: Contract Name, Counterparty, Effective Date, Expiry Date
+- Upload supporting documents if required
+- Assign the contract to the appropriate business unit and module
+- Click "Submit for Review" to move the contract to the approval workflow
+
+1.2 Contract Templates
+- ICM provides pre-approved templates for standard contract types
+- Navigate to Templates > Browse Templates to find approved templates
+- Templates ensure compliance with Airtel's legal standards
+- Customizations to templates require Legal team approval
+
+2. CONTRACT APPROVAL WORKFLOW
+
+2.1 Approval Stages
+- Stage 1: Business Owner Review (1-2 business days)
+- Stage 2: Legal Review (3-5 business days for new templates, 1 day for standard)
+- Stage 3: Finance Approval (for contracts above INR 10 lakhs)
+- Stage 4: Management Sign-off (for contracts above INR 1 crore)
+
+2.2 Escalation Process
+- If a reviewer does not act within the SLA, the contract auto-escalates to their manager
+- Escalations are visible in the Dashboard under "Pending Approvals"
+- To manually escalate, click "Escalate" on the contract detail page
+
+3. CONTRACT AMENDMENTS
+
+3.1 Raising an Amendment
+- Open the original contract
+- Click "Create Amendment"
+- Specify the sections being amended and provide justification
+- Amendments follow the same approval workflow as new contracts
+
+3.2 Version Control
+- ICM maintains a full version history of all contracts
+- Previous versions are accessible via the "Version History" tab
+- Only the latest approved version is the active contract
+
+4. CONTRACT RENEWAL
+
+4.1 Automatic Renewal Alerts
+- ICM sends email alerts 90, 60, and 30 days before contract expiry
+- Alerts are sent to the Contract Owner and their manager
+- Navigate to Contracts > Expiring Soon to see all contracts needing attention
+
+4.2 Renewal Process
+- Open the expiring contract
+- Click "Initiate Renewal"
+- Update the new effective and expiry dates
+- Renewal goes through a streamlined approval workflow (Legal review optional for unchanged terms)
+
+5. TROUBLESHOOTING COMMON ISSUES
+
+5.1 Contract Stuck in Approval
+- Check if the assigned approver is on leave (Out-of-Office delegation needed)
+- Verify the approver has ICM login access
+- Contact ICM support at icm-support@airtel.com for system issues
+
+5.2 Cannot Find a Contract
+- Use Advanced Search with Contract ID, Counterparty name, or date range
+- Check if the contract was archived (Contracts > Archived)
+- Verify you have the correct access permissions for that contract
+
+5.3 Signature Issues with DocuSign Integration
+- Ensure the signatories' email addresses are correct in the contract
+- DocuSign envelopes expire after 30 days; re-initiate if expired
+- For bulk signing issues, contact the ICM admin team
+
+6. ACCESS AND PERMISSIONS
+
+6.1 Requesting Access
+- Submit an access request via ServiceNow: Category = ICM Access
+- Specify the required role: Viewer, Creator, Approver, or Admin
+- Access is provisioned within 2 business days
+
+6.2 Role Descriptions
+- Viewer: Read-only access to contracts in assigned business unit
+- Creator: Can create and edit contracts, cannot approve
+- Approver: Can approve contracts within delegated authority limits
+- Admin: Full access including configuration and user management
