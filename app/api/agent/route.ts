@@ -1,0 +1,69 @@
+import { type NextRequest } from 'next/server';
+import { runAgent } from '@/lib/agent/executor';
+import type { ModuleType } from '@/lib/supabase/types';
+
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+export async function POST(request: NextRequest) {
+  let body: { message?: string; sessionId?: string; module?: string };
+
+  try {
+    body = await request.json();
+  } catch {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: 'Invalid request body' })}\n\n`,
+      { status: 400, headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  }
+
+  const { message, sessionId, module = 'general' } = body;
+
+  if (!message?.trim()) {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: 'Message is required' })}\n\n`,
+      { status: 400, headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  }
+
+  const validModules: ModuleType[] = ['icm', 'oracle', 'general'];
+  const selectedModule: ModuleType = validModules.includes(module as ModuleType)
+    ? (module as ModuleType)
+    : 'general';
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      function send(data: object) {
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify(data)}\n\n`)
+        );
+      }
+
+      try {
+        for await (const chunk of runAgent({
+          query: message.trim(),
+          module: selectedModule,
+          sessionId,
+        })) {
+          send(chunk);
+        }
+      } catch (err) {
+        console.error('Agent route error:', err);
+        send({ type: 'error', error: 'Agent encountered an error' });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  });
+}
