@@ -1,39 +1,48 @@
-import { TaskType } from '@google/generative-ai';
-import { gemini, EMBEDDING_MODEL } from './client';
+// text-embedding-004 is only on the v1 API; @google/generative-ai v0.15.0 is hardcoded
+// to v1beta, so we call the REST endpoint directly instead of using the SDK.
+const EMBED_MODEL = 'text-embedding-004';
+const EMBED_URL = `https://generativelanguage.googleapis.com/v1/models/${EMBED_MODEL}:embedContent`;
 
-const embeddingModel = gemini.getGenerativeModel({ model: EMBEDDING_MODEL });
+async function callEmbedAPI(text: string, taskType: 'RETRIEVAL_QUERY' | 'RETRIEVAL_DOCUMENT'): Promise<number[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
 
-// Use RETRIEVAL_QUERY for user queries at search time
-export async function embedQuery(text: string): Promise<number[]> {
-  const result = await embeddingModel.embedContent({
-    content: { parts: [{ text }], role: 'user' },
-    taskType: TaskType.RETRIEVAL_QUERY,
+  const resp = await fetch(`${EMBED_URL}?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: `models/${EMBED_MODEL}`,
+      content: { parts: [{ text }] },
+      taskType,
+    }),
   });
-  return result.embedding.values;
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Gemini embed ${resp.status}: ${body}`);
+  }
+
+  const data = await resp.json();
+  return data.embedding.values as number[];
 }
 
-// Use RETRIEVAL_DOCUMENT for chunks being stored (called from API only, not ingestion scripts)
+export async function embedQuery(text: string): Promise<number[]> {
+  return callEmbedAPI(text, 'RETRIEVAL_QUERY');
+}
+
 export async function embedDocument(text: string): Promise<number[]> {
-  const result = await embeddingModel.embedContent({
-    content: { parts: [{ text }], role: 'user' },
-    taskType: TaskType.RETRIEVAL_DOCUMENT,
-  });
-  return result.embedding.values;
+  return callEmbedAPI(text, 'RETRIEVAL_DOCUMENT');
 }
 
 // Batch embed with delay to respect Gemini free tier rate limits (15 RPM)
 export async function embedBatch(
   texts: string[],
-  taskType: TaskType = TaskType.RETRIEVAL_DOCUMENT,
+  taskType: 'RETRIEVAL_QUERY' | 'RETRIEVAL_DOCUMENT' = 'RETRIEVAL_DOCUMENT',
   delayMs = 200
 ): Promise<number[][]> {
   const results: number[][] = [];
   for (const text of texts) {
-    const result = await embeddingModel.embedContent({
-      content: { parts: [{ text }], role: 'user' },
-      taskType,
-    });
-    results.push(result.embedding.values);
+    results.push(await callEmbedAPI(text, taskType));
     if (delayMs > 0) {
       await new Promise((r) => setTimeout(r, delayMs));
     }

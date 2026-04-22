@@ -9,5 +9,5 @@ if (!apiKey) {
 export const gemini = new GoogleGenerativeAI(apiKey);
 
 export const CHAT_MODEL = 'gemini-1.5-flash';
-// text-embedding-004 is v1-only; embedding-001 works on v1beta (same 768-dim output)
-export const EMBEDDING_MODEL = 'embedding-001';
+// embeddings.ts calls the v1 REST API directly (SDK is hardcoded to v1beta)
+export const EMBEDDING_MODEL = 'text-embedding-004';
