@@ -25,7 +25,7 @@ export async function* runAgent(
         systemInstruction: getSystemPrompt(module),
         generationConfig: { temperature: 0.3, topP: 0.95, maxOutputTokens: 2048 },
       },
-      { apiVersion: 'v1' }
+      { apiVersion: 'v1beta' }
     );
 
     const chat = model.startChat({ history: [] });

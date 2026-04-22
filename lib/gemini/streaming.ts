@@ -1,9 +1,7 @@
-// Bypass @google/generative-ai SDK (hardcodes v1beta) — call v1 REST directly.
-// v1 and v1beta are tracked under separate quota pools; free-tier quota on v1beta
-// may be 0 even when v1 has available quota.
+// Direct REST call to v1beta — supports systemInstruction, gemini-2.5-flash, and streaming SSE.
+// Set GEMINI_CHAT_MODEL in Vercel env vars to override model without redeployment.
 
-const BASE = 'https://generativelanguage.googleapis.com/v1';
-// Set GEMINI_CHAT_MODEL in Vercel env vars to override without redeployment
+const BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const DEFAULT_CHAT_MODEL = 'gemini-2.5-flash';
 
 export { DEFAULT_CHAT_MODEL as CHAT_MODEL };
