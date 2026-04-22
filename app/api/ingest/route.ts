@@ -16,7 +16,6 @@ function chunkText(text: string): string[] {
   while (start < normalized.length) {
     const end = Math.min(start + CHUNK_SIZE, normalized.length);
 
-    // Prefer breaking at a paragraph or sentence boundary near the chunk end
     let breakAt = end;
     if (end < normalized.length) {
       const para = normalized.lastIndexOf('\n\n', end);
@@ -33,7 +32,6 @@ function chunkText(text: string): string[] {
     if (chunk.length > 20) chunks.push(chunk);
 
     start = breakAt - CHUNK_OVERLAP;
-    if (start <= 0 && breakAt >= normalized.length) break;
     if (start < 0) start = 0;
     if (start >= normalized.length) break;
   }
@@ -53,47 +51,64 @@ async function extractText(file: File): Promise<string> {
 }
 
 export async function POST(request: NextRequest) {
+  // Read request body BEFORE creating the stream — once the Response is
+  // returned, Next.js may dispose the request body.
+  let file: File | null = null;
+  let title = '';
+  let module: ModuleType | null = null;
+
+  try {
+    const formData = await request.formData();
+    file = formData.get('file') as File | null;
+    title = ((formData.get('title') as string | null) ?? '').trim();
+    module = formData.get('module') as ModuleType | null;
+  } catch {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: 'Could not parse form data' })}\n\n`,
+      { status: 400, headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  }
+
+  if (!file || !title || !module) {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: 'file, title, and module are required' })}\n\n`,
+      { status: 400, headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  }
+
   const enc = new TextEncoder();
+  // Pre-read file bytes before streaming so the File object is ready
+  const fileBuffer = await file.arrayBuffer();
+  const capturedFile = new File([fileBuffer], file.name, { type: file.type });
+  const capturedTitle = title;
+  const capturedModule = module;
 
   const stream = new ReadableStream({
     async start(controller) {
-      const send = (data: object) =>
-        controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+      const send = (data: object) => {
+        try {
+          controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch { /* controller already closed */ }
+      };
+
+      // Keep-alive ping every 8s to prevent proxy timeouts during embedding
+      const ping = setInterval(() => {
+        try { controller.enqueue(enc.encode(': ping\n\n')); } catch { /* closed */ }
+      }, 8000);
 
       try {
-        let formData: FormData;
-        try {
-          formData = await request.formData();
-        } catch {
-          send({ type: 'error', error: 'Invalid form data' });
-          controller.close();
-          return;
-        }
-
-        const file = formData.get('file') as File | null;
-        const title = (formData.get('title') as string | null)?.trim();
-        const module = formData.get('module') as ModuleType | null;
-
-        if (!file || !title || !module) {
-          send({ type: 'error', error: 'file, title, and module are required' });
-          controller.close();
-          return;
-        }
-
         send({ type: 'progress', step: 'Reading file…', percent: 5 });
 
         let text: string;
         try {
-          text = await extractText(file);
+          text = await extractText(capturedFile);
         } catch (e) {
           send({ type: 'error', error: `Text extraction failed: ${e instanceof Error ? e.message : String(e)}` });
-          controller.close();
           return;
         }
 
         if (!text.trim()) {
           send({ type: 'error', error: 'File appears to be empty or unreadable' });
-          controller.close();
           return;
         }
 
@@ -102,21 +117,20 @@ export async function POST(request: NextRequest) {
 
         if (chunks.length === 0) {
           send({ type: 'error', error: 'No text chunks produced' });
-          controller.close();
           return;
         }
 
         const supabase = createServerClient();
-        const fileType = file.type === 'application/pdf' || file.name.endsWith('.pdf') ? 'pdf' : 'text';
+        const fileType = capturedFile.type === 'application/pdf' || capturedFile.name.endsWith('.pdf') ? 'pdf' : 'text';
 
         const { data: doc, error: docErr } = await supabase
           .from('documents')
           .insert({
-            title,
-            file_name: file.name,
+            title: capturedTitle,
+            file_name: capturedFile.name,
             file_type: fileType,
-            module,
-            file_size: file.size,
+            module: capturedModule,
+            file_size: capturedFile.size,
             status: 'processing',
             metadata: { source: 'admin_upload' },
           })
@@ -125,7 +139,6 @@ export async function POST(request: NextRequest) {
 
         if (docErr || !doc) {
           send({ type: 'error', error: docErr?.message ?? 'Failed to create document record' });
-          controller.close();
           return;
         }
 
@@ -135,9 +148,8 @@ export async function POST(request: NextRequest) {
           const embeddings: number[][] = [];
           for (let i = 0; i < chunks.length; i++) {
             embeddings.push(await embedDocument(chunks[i]));
-            // Rate-limit: Gemini free tier ~15 RPM
             if (i < chunks.length - 1) await new Promise((r) => setTimeout(r, 200));
-            if (i % 5 === 4 || i === chunks.length - 1) {
+            if (i % 3 === 2 || i === chunks.length - 1) {
               const pct = 25 + Math.round(((i + 1) / chunks.length) * 55);
               send({ type: 'progress', step: `Embedded ${i + 1}/${chunks.length} chunks`, percent: pct });
             }
@@ -150,8 +162,8 @@ export async function POST(request: NextRequest) {
             content,
             chunk_index: i,
             embedding: embeddings[i],
-            module,
-            metadata: { source_file: file.name, module, doc_type: fileType },
+            module: capturedModule,
+            metadata: { source_file: capturedFile.name, module: capturedModule, doc_type: fileType },
             token_count: content.split(/\s+/).length,
           }));
 
@@ -175,13 +187,9 @@ export async function POST(request: NextRequest) {
           send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
         }
       } catch (err) {
-        try {
-          const enc2 = new TextEncoder();
-          controller.enqueue(
-            enc2.encode(`data: ${JSON.stringify({ type: 'error', error: String(err) })}\n\n`)
-          );
-        } catch { /* controller already closed */ }
+        send({ type: 'error', error: err instanceof Error ? err.message : String(err) });
       } finally {
+        clearInterval(ping);
         controller.close();
       }
     },
@@ -192,6 +200,7 @@ export async function POST(request: NextRequest) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       'X-Accel-Buffering': 'no',
+      Connection: 'keep-alive',
     },
   });
 }

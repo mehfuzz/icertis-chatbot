@@ -28,6 +28,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 
     return (
       <button
+        type="button"
         ref={ref}
         className={clsx(base, variants[variant], sizes[size], className)}
         disabled={disabled || loading}
