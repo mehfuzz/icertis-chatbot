@@ -18,7 +18,7 @@ function NavLink({ href, icon: Icon, label }: { href: string; icon: React.Elemen
   );
 }
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminProtectedLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = cookies();
   const adminToken = cookieStore.get('admin_token');
   const adminKey = process.env.ADMIN_SECRET_KEY;

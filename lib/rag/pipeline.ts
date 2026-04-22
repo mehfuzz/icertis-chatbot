@@ -142,8 +142,13 @@ export async function* runRAGPipeline(
     yield { type: 'done', logId, responseType };
   } catch (err) {
     console.error('RAG pipeline error:', err);
-    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-    yield { type: 'error', error: 'Failed to generate response. Please try again.' };
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    const isApiKeyError = errorMsg.includes('API_KEY') || errorMsg.includes('API key') || errorMsg.includes('PERMISSION_DENIED');
+    const userError = isApiKeyError
+      ? 'Configuration error: Gemini API key is invalid or not set. Please check GEMINI_API_KEY in environment variables.'
+      : `Failed to generate response: ${errorMsg}`;
+
+    yield { type: 'error', error: userError };
 
     await saveQueryLog({
       sessionId,

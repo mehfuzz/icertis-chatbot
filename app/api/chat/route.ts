@@ -6,6 +6,19 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  const missingVars = [
+    'GEMINI_API_KEY',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+  ].filter((v) => !process.env[v]);
+
+  if (missingVars.length > 0) {
+    return new Response(
+      `data: ${JSON.stringify({ type: 'error', error: `Missing environment variables: ${missingVars.join(', ')}. Set these in your Vercel project settings.` })}\n\n`,
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+    );
+  }
+
   let body: { message?: string; sessionId?: string; module?: string };
 
   try {
