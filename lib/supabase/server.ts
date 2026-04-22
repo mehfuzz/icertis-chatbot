@@ -1,7 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Trim trailing slash — Supabase Kong gateway returns "Invalid path" on double-slash URLs
-const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/\/$/, '');
+// Strip /rest/v1 suffix and trailing slash — the client appends these itself.
+// A common mistake is setting the URL to https://xyz.supabase.co/rest/v1/ instead of https://xyz.supabase.co
+const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '')
+  .replace(/\/rest\/v1\/?$/, '')
+  .replace(/\/$/, '');
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
 // Server client — uses service role key, bypasses RLS
