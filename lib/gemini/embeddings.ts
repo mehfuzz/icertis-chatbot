@@ -1,7 +1,9 @@
-// The @google/generative-ai SDK v0.15.0 hardcodes v1beta; embedding models may only be on v1.
-// We call the REST API directly and auto-discover the right model via ListModels.
+// @google/generative-ai v0.15.0 hardcodes v1beta; gemini-embedding-001 is on v1beta.
+// We call REST directly to control outputDimensionality (default is 3072 but schema is vector(768)).
 
-const BASE = 'https://generativelanguage.googleapis.com';
+const BASE = 'https://generativelanguage.googleapis.com/v1beta';
+// Set GEMINI_EMBEDDING_MODEL env var to override (e.g. gemini-embedding-2-preview)
+const DEFAULT_EMBED_MODEL = 'gemini-embedding-001';
 
 function apiKey(): string {
   const key = process.env.GEMINI_API_KEY;
@@ -9,55 +11,25 @@ function apiKey(): string {
   return key;
 }
 
-// Cached per serverless function instance (reset on cold start)
-let cachedEmbedUrl: string | null = null;
-
-async function resolveEmbedUrl(): Promise<string> {
-  if (cachedEmbedUrl) return cachedEmbedUrl;
-
-  // Manual override: set GEMINI_EMBEDDING_MODEL=text-embedding-004 in Vercel env vars
-  const override = process.env.GEMINI_EMBEDDING_MODEL;
-  if (override) {
-    const modelPath = override.startsWith('models/') ? override : `models/${override}`;
-    cachedEmbedUrl = `${BASE}/v1beta/${modelPath}:embedContent`;
-    return cachedEmbedUrl;
-  }
-
-  // Auto-discover: try v1beta first (same version as chat model), then v1
-  const key = apiKey();
-  for (const ver of ['v1beta', 'v1']) {
-    const res = await fetch(`${BASE}/${ver}/models?key=${key}`);
-    if (!res.ok) continue;
-    const { models = [] } = await res.json();
-    const found = (models as Array<{ name: string; supportedGenerationMethods?: string[] }>)
-      .find((m) => m.supportedGenerationMethods?.includes('embedContent'));
-    if (found) {
-      console.log(`[embeddings] using ${found.name} via ${ver}`);
-      cachedEmbedUrl = `${BASE}/${ver}/${found.name}:embedContent`;
-      return cachedEmbedUrl;
-    }
-  }
-
-  throw new Error(
-    'No embedding model found for this API key. ' +
-    'Set GEMINI_EMBEDDING_MODEL env var (e.g. text-embedding-004) or visit /api/models to see available models.'
-  );
+function embedUrl(): string {
+  const model = process.env.GEMINI_EMBEDDING_MODEL ?? DEFAULT_EMBED_MODEL;
+  const modelPath = model.startsWith('models/') ? model : `models/${model}`;
+  return `${BASE}/${modelPath}:embedContent`;
 }
 
 async function callEmbed(text: string, taskType: 'RETRIEVAL_QUERY' | 'RETRIEVAL_DOCUMENT'): Promise<number[]> {
-  const url = await resolveEmbedUrl();
-  const res = await fetch(`${url}?key=${apiKey()}`, {
+  const res = await fetch(`${embedUrl()}?key=${apiKey()}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       content: { parts: [{ text }] },
       taskType,
+      outputDimensionality: 768,
     }),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    cachedEmbedUrl = null; // bust cache so next request re-discovers
     throw new Error(`Gemini embed ${res.status}: ${body}`);
   }
 

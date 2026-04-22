@@ -5,7 +5,7 @@ import time
 import google.generativeai as genai
 from dotenv import load_dotenv
 from tqdm import tqdm
-from config import EMBEDDING_MODEL, EMBEDDING_DELAY_SECONDS
+from config import EMBEDDING_MODEL, EMBEDDING_DELAY_SECONDS, EMBEDDING_OUTPUT_DIM
 
 load_dotenv()
 
@@ -18,6 +18,7 @@ def embed_document(text: str) -> list[float]:
         model=EMBEDDING_MODEL,
         content=text,
         task_type="retrieval_document",
+        output_dimensionality=EMBEDDING_OUTPUT_DIM,
     )
     return result["embedding"]
 
@@ -28,6 +29,7 @@ def embed_query(text: str) -> list[float]:
         model=EMBEDDING_MODEL,
         content=text,
         task_type="retrieval_query",
+        output_dimensionality=EMBEDDING_OUTPUT_DIM,
     )
     return result["embedding"]
 
@@ -47,6 +49,7 @@ def embed_batch(
             model=EMBEDDING_MODEL,
             content=text,
             task_type=task_type,
+            output_dimensionality=EMBEDDING_OUTPUT_DIM,
         )
         embeddings.append(result["embedding"])
         if delay > 0:
