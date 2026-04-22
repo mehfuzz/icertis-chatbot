@@ -39,15 +39,47 @@ function chunkText(text: string): string[] {
   return chunks;
 }
 
-async function extractText(file: File): Promise<string> {
-  if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const pdfParse = require('pdf-parse');
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const data = await pdfParse(buffer);
-    return data.text as string;
+async function extractText(
+  fileName: string,
+  mimeType: string,
+  buffer: ArrayBuffer
+): Promise<string> {
+  const isPDF = mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+
+  if (isPDF) {
+    // Use Gemini multimodal API — no PDF parsing library needed, no browser globals
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+
+    const base64 = Buffer.from(buffer).toString('base64');
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: 'application/pdf', data: base64 } },
+              { text: 'Extract all text from this document verbatim. Preserve paragraph structure with newlines. Return only the raw text — no commentary.' },
+            ],
+          }],
+          generationConfig: { temperature: 0 },
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Gemini PDF extraction ${res.status}: ${body}`);
+    }
+
+    const json = await res.json();
+    return (json.candidates?.[0]?.content?.parts?.[0]?.text as string) ?? '';
   }
-  return file.text();
+
+  // Plain text — pure Node.js Buffer, no Web API dependency
+  return Buffer.from(buffer).toString('utf-8');
 }
 
 export async function POST(request: NextRequest) {
@@ -77,9 +109,10 @@ export async function POST(request: NextRequest) {
   }
 
   const enc = new TextEncoder();
-  // Pre-read file bytes before streaming so the File object is ready
   const fileBuffer = await file.arrayBuffer();
-  const capturedFile = new File([fileBuffer], file.name, { type: file.type });
+  const fileName = file.name;
+  const mimeType = file.type;
+  const fileSize = file.size;
   const capturedTitle = title;
   const capturedModule = module;
 
@@ -101,7 +134,7 @@ export async function POST(request: NextRequest) {
 
         let text: string;
         try {
-          text = await extractText(capturedFile);
+          text = await extractText(fileName, mimeType, fileBuffer);
         } catch (e) {
           send({ type: 'error', error: `Text extraction failed: ${e instanceof Error ? e.message : String(e)}` });
           return;
@@ -121,16 +154,16 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = createServerClient();
-        const fileType = capturedFile.type === 'application/pdf' || capturedFile.name.endsWith('.pdf') ? 'pdf' : 'text';
+        const fileType = mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf') ? 'pdf' : 'text';
 
         const { data: doc, error: docErr } = await supabase
           .from('documents')
           .insert({
             title: capturedTitle,
-            file_name: capturedFile.name,
+            file_name: fileName,
             file_type: fileType,
             module: capturedModule,
-            file_size: capturedFile.size,
+            file_size: fileSize,
             status: 'processing',
             metadata: { source: 'admin_upload' },
           })
@@ -163,7 +196,7 @@ export async function POST(request: NextRequest) {
             chunk_index: i,
             embedding: embeddings[i],
             module: capturedModule,
-            metadata: { source_file: capturedFile.name, module: capturedModule, doc_type: fileType },
+            metadata: { source_file: fileName, module: capturedModule, doc_type: fileType },
             token_count: content.split(/\s+/).length,
           }));
 
